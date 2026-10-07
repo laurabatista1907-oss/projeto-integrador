@@ -1,0 +1,111 @@
+// ===== PINOS =====
+int botao = 2;
+int sensor = A0;
+
+int IN1 = 8;
+int IN2 = 9;
+int IN3 = 10;
+int IN4 = 11;
+
+int ENA = 5;
+int ENB = 6;
+
+// ===== CONTROLE =====
+int estadoBotao = HIGH;
+int ultimoEstado = HIGH;
+
+int modo = 0; // 0=off, 1=leve, 2=medio, 3=forte
+
+// ===== SEGURANÇA =====
+int LIMITE = 850;   // pressão máxima
+bool travado = false;
+
+// ===== SETUP =====
+void setup() {
+  pinMode(botao, INPUT_PULLUP);
+
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  pinMode(IN3, OUTPUT);
+  pinMode(IN4, OUTPUT);
+
+  pinMode(ENA, OUTPUT);
+  pinMode(ENB, OUTPUT);
+
+  Serial.begin(9600); // opcional para debug
+}
+
+// ===== LOOP =====
+void loop() {
+
+  // ===== BOTÃO =====
+  estadoBotao = digitalRead(botao);
+
+  if (ultimoEstado == HIGH && estadoBotao == LOW) {
+    modo++;
+    if (modo > 3) modo = 0;
+    delay(200); // debounce
+  }
+
+  ultimoEstado = estadoBotao;
+
+  // ===== SENSOR =====
+  int leitura = analogRead(sensor);
+  Serial.println(leitura); // debug opcional
+
+  // ===== ATIVA TRAVA =====
+  if (leitura > LIMITE) {
+    travado = true;
+  }
+
+  // ===== DESATIVA TRAVA (quando aliviar pressão) =====
+  if (leitura < 200) {
+    travado = false;
+  }
+
+  // ===== SE TRAVADO → DESLIGA TUDO =====
+  if (travado) {
+    analogWrite(ENA, 0);
+    analogWrite(ENB, 0);
+    return;
+  }
+
+  // ===== VELOCIDADE BASE POR MODO =====
+  int base;
+
+  switch (modo) {
+    case 0: base = 0; break;
+    case 1: base = 80; break;
+    case 2: base = 150; break;
+    case 3: base = 220; break;
+  }
+
+  // ===== AJUSTE PELO SENSOR =====
+  int ajuste = map(leitura, 0, LIMITE, 0, 35);
+  int velocidade = base + ajuste;
+
+  velocidade = constrain(velocidade, 0, 255);
+
+  // ===== CONTROLE DOS MOTORES =====
+  if (modo == 0) {
+
+    analogWrite(ENA, 0);
+    analogWrite(ENB, 0);
+
+  } else {
+
+    // direção fixa
+    digitalWrite(IN1, HIGH);
+    digitalWrite(IN2, LOW);
+
+    digitalWrite(IN3, HIGH);
+    digitalWrite(IN4, LOW);
+
+    // efeito de massagem (pulsante)
+    int efeito = velocidade + 30 * sin(millis() / 300.0);
+    efeito = constrain(efeito, 0, 255);
+
+    analogWrite(ENA, efeito);
+    analogWrite(ENB, efeito);
+  }
+}
